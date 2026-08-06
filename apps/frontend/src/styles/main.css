@@ -661,11 +661,9 @@ input[aria-invalid='true'] {
   grid-auto-flow: column;
   grid-auto-columns: 174px;
   gap: 0.9rem;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
+  overflow-x: hidden;
   scroll-snap-type: inline mandatory;
-  scrollbar-color: #3b455e transparent;
-  scrollbar-width: thin;
+  touch-action: pan-y;
   padding: 0.15rem 0 0.9rem;
 }
 
@@ -903,9 +901,5 @@ input[aria-invalid='true'] {
   .carousel-track,
   .carousel-loading {
     grid-auto-columns: 154px;
-  }
-
-  .carousel-controls {
-    display: none;
   }
 }

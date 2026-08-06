@@ -322,7 +322,7 @@ GET /api/v1/movies?page=1&genre_id=18&sort=highlights
 Accept: application/json
 ```
 
-Exemplo de busca por título, com ordenação da página retornada:
+Exemplo de busca por título, com ordenação da janela de resultados:
 
 ```http
 GET /api/v1/movies?query=matrix&page=1&genre_id=878&sort=title_asc
@@ -360,7 +360,8 @@ Os guards Vue melhoram a navegação, mas não são controle de acesso. Policies
 - detalhes: 3600 s;
 - gêneros: 86400 s;
 - coleções da home: 1800 s;
-- chaves incluem idioma, região, página, filtros, ordenação e query normalizada/hasheada;
+- páginas brutas de busca são cacheadas por idioma, região, página e query normalizada/hasheada;
+- descoberta mantém chaves próprias por página, filtro e ordenação;
 - Redis usa conexão separada para cache;
 - timeout de conexão: 3 s;
 - timeout total: 8 s;
@@ -439,7 +440,7 @@ Build de produção:
 docker compose build backend worker nginx
 ```
 
-A cobertura backend inclui DTO unitário, favoritos, autorização, filtro JSONB, validação, cache/erros TMDB, cadastro, sessão, verificação, reset e OAuth falso. O frontend cobre card, paginação e store de autenticação.
+A cobertura backend inclui DTO unitário, favoritos, autorização, filtro JSONB, validação, cache/erros e janela de busca TMDB, cadastro, sessão, verificação, reset e OAuth falso. O frontend cobre cards, carrossel por setas, paginação, URL curta, formulário de busca e store de autenticação.
 
 ## Padrão de desenvolvimento
 
@@ -462,7 +463,7 @@ Consulte [DEVELOPMENT.md](DEVELOPMENT.md) antes de alterar contratos, banco ou i
 - credenciais Google/TMDB precisam ser criadas e inseridas pelo responsável;
 - não há testes E2E em navegador nem pipeline CI neste repositório;
 - não há painel para reprocessar jobs falhos;
-- na busca textual, gênero e ordenação são aplicados à página retornada pelo TMDB; a descoberta sem texto usa filtros globais nativos;
+- na busca textual, gênero e ordenação são aplicados a uma janela de duas páginas adjacentes do TMDB; a descoberta sem texto usa filtros globais nativos;
 - a disponibilidade e as imagens dos filmes dependem do TMDB;
 - a imagem Nginx é estática: mudanças Vue exigem rebuild;
 - produção exige domínio, HTTPS, SMTP real e revisão dos limites conforme a carga.

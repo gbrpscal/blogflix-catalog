@@ -13,6 +13,10 @@ use Illuminate\Support\Str;
 
 class TmdbMovieService
 {
+    private const SEARCH_WINDOW_SIZE = 2;
+
+    private const TMDB_PAGE_SIZE = 20;
+
     public function __construct(private readonly TmdbClient $client) {}
 
     public function catalog(
@@ -33,18 +37,48 @@ class TmdbMovieService
         ?int $genreId = null,
     ): MoviePageData {
         $query = $this->normalizeQuery($query);
+        $page = max(1, $page);
         $language = (string) config('tmdb.language');
         $region = (string) config('tmdb.region');
-        $key = 'tmdb:v1:search:'.hash('sha256', implode('|', [
+        $windowStart = intdiv($page - 1, self::SEARCH_WINDOW_SIZE) * self::SEARCH_WINDOW_SIZE + 1;
+        $firstPayload = $this->searchPayload($query, $windowStart, $language, $region);
+        $totalPages = min(500, max(0, (int) ($firstPayload['total_pages'] ?? 0)));
+        $results = $firstPayload['results'];
+
+        $windowEnd = min($totalPages, $windowStart + self::SEARCH_WINDOW_SIZE - 1);
+        for ($sourcePage = $windowStart + 1; $sourcePage <= $windowEnd; $sourcePage++) {
+            $payload = $this->searchPayload($query, $sourcePage, $language, $region);
+            $results = array_merge($results, $payload['results']);
+        }
+
+        $window = $this->pageFromPayload([
+            'page' => $page,
+            'total_pages' => $totalPages,
+            'total_results' => (int) ($firstPayload['total_results'] ?? 0),
+            'results' => $results,
+        ], $page, $sort, $genreId, true);
+
+        $offset = (($page - 1) % self::SEARCH_WINDOW_SIZE) * self::TMDB_PAGE_SIZE;
+
+        return new MoviePageData(
+            movies: array_slice($window->movies, $offset, self::TMDB_PAGE_SIZE),
+            page: $page,
+            totalPages: $window->totalPages,
+            totalResults: $window->totalResults,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function searchPayload(string $query, int $page, string $language, string $region): array
+    {
+        $key = 'tmdb:v2:search-page:'.hash('sha256', implode('|', [
             $query,
             $page,
             $language,
             $region,
-            $sort->value,
-            $genreId ?? 'all',
         ]));
 
-        return Cache::remember($key, (int) config('tmdb.cache.search_ttl'), function () use ($query, $page, $language, $region, $sort, $genreId): MoviePageData {
+        return Cache::remember($key, (int) config('tmdb.cache.search_ttl'), function () use ($query, $page, $language, $region): array {
             $payload = $this->client->get('/search/movie', [
                 'query' => $query,
                 'page' => $page,
@@ -53,7 +87,11 @@ class TmdbMovieService
                 'include_adult' => 'false',
             ]);
 
-            return $this->pageFromPayload($payload, $page, $sort, $genreId, true);
+            if (! is_array($payload['results'] ?? null)) {
+                throw TmdbException::invalidResponse();
+            }
+
+            return $payload;
         });
     }
 

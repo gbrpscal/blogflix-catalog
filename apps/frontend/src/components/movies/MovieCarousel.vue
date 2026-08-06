@@ -48,7 +48,7 @@ function move(direction: -1 | 1) {
       </div>
     </div>
 
-    <div ref="track" class="carousel-track" tabindex="0">
+    <div ref="track" class="carousel-track">
       <MovieCard
         v-for="movie in movies"
         :key="movie.tmdb_id"

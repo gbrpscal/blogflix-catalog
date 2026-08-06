@@ -38,6 +38,8 @@ describe('MovieCarousel', () => {
 
     expect(wrapper.text()).toContain('Em alta')
     expect(wrapper.text()).toContain('Clube da Luta')
+    expect(wrapper.findAll('.carousel-button')).toHaveLength(2)
+    expect(wrapper.get('.carousel-track').attributes('tabindex')).toBeUndefined()
 
     await wrapper.findAll('.carousel-button')[1]!.trigger('click')
     expect(scrollBy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))

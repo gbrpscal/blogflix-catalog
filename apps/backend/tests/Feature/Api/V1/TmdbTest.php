@@ -28,6 +28,47 @@ it('caches identical TMDB searches', function (): void {
     Http::assertSentCount(1);
 });
 
+it('broadens partial searches across adjacent TMDB pages while preserving pagination', function (): void {
+    Cache::clear();
+    $firstPage = collect(range(1, 20))
+        ->map(fn (int $id): array => array_merge(fakeMovieDetails($id), [
+            'title' => "Resultado {$id}",
+            'vote_average' => 1.0,
+        ]))
+        ->all();
+    $secondPage = collect(range(21, 40))
+        ->map(fn (int $id): array => array_merge(fakeMovieDetails($id), [
+            'title' => "Outro resultado {$id}",
+            'vote_average' => 1.0,
+        ]))
+        ->all();
+    $secondPage[0] = array_merge(fakeMovieDetails(21), [
+        'title' => 'Minha Mãe é uma Peça: O Filme',
+        'vote_average' => 8.0,
+    ]);
+
+    Http::fake(function (Request $request) use ($firstPage, $secondPage) {
+        $page = (int) $request['page'];
+
+        return Http::response([
+            'page' => $page,
+            'total_pages' => 2,
+            'total_results' => 40,
+            'results' => $page === 1 ? $firstPage : $secondPage,
+        ]);
+    });
+
+    $service = app(TmdbMovieService::class);
+    $first = $service->search('Minha mãe', 1);
+    $second = $service->search('Minha mãe', 2);
+
+    expect($first->movies)->toHaveCount(20)
+        ->and($first->movies[0]->title)->toBe('Minha Mãe é uma Peça: O Filme')
+        ->and($second->movies)->toHaveCount(20)
+        ->and(collect($first->movies)->merge($second->movies)->pluck('id')->unique())->toHaveCount(40);
+    Http::assertSentCount(2);
+});
+
 it('caches the TMDB genre list', function (): void {
     Cache::clear();
     Http::fake(['api.themoviedb.org/3/genre/movie/list*' => Http::response(['genres' => [['id' => 18, 'name' => 'Drama']]])]);
