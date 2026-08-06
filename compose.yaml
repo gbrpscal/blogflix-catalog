@@ -1,0 +1,225 @@
+name: blogflix
+
+x-backend-environment: &backend-environment
+  APP_NAME: ${APP_NAME:-Blogflix}
+  APP_ENV: ${APP_ENV:-local}
+  APP_KEY: ${APP_KEY:-}
+  APP_DEBUG: ${APP_DEBUG:-false}
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+  APP_LOCALE: ${APP_LOCALE:-pt_BR}
+  APP_FALLBACK_LOCALE: ${APP_FALLBACK_LOCALE:-en}
+  APP_TIMEZONE: ${APP_TIMEZONE:-America/Sao_Paulo}
+  LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${DB_DATABASE:-blogflix}
+  DB_USERNAME: ${DB_USERNAME:-blogflix}
+  DB_PASSWORD: ${DB_PASSWORD:-change-me}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  SESSION_LIFETIME: ${SESSION_LIFETIME:-120}
+  SESSION_DOMAIN: ${SESSION_DOMAIN:-}
+  SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-false}
+  SESSION_HTTP_ONLY: ${SESSION_HTTP_ONLY:-true}
+  SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
+  SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost:8080,127.0.0.1:8080}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+  QUEUE_CONNECTION: redis
+  MAIL_MAILER: ${MAIL_MAILER:-smtp}
+  MAIL_HOST: ${MAIL_HOST:-mailpit}
+  MAIL_PORT: ${MAIL_PORT:-1025}
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  MAIL_SCHEME: ${MAIL_SCHEME:-}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@blogflix.local}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Blogflix}
+  TMDB_API_TOKEN: ${TMDB_API_TOKEN:-}
+  TMDB_BASE_URL: ${TMDB_BASE_URL:-https://api.themoviedb.org/3}
+  TMDB_IMAGE_BASE_URL: ${TMDB_IMAGE_BASE_URL:-https://image.tmdb.org/t/p}
+  TMDB_LANGUAGE: ${TMDB_LANGUAGE:-pt-BR}
+  TMDB_REGION: ${TMDB_REGION:-BR}
+  TMDB_CONNECT_TIMEOUT: ${TMDB_CONNECT_TIMEOUT:-3}
+  TMDB_TIMEOUT: ${TMDB_TIMEOUT:-8}
+  TMDB_SEARCH_CACHE_TTL: ${TMDB_SEARCH_CACHE_TTL:-600}
+  TMDB_MOVIE_CACHE_TTL: ${TMDB_MOVIE_CACHE_TTL:-3600}
+  TMDB_GENRES_CACHE_TTL: ${TMDB_GENRES_CACHE_TTL:-86400}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/api/v1/auth/google/callback}
+
+services:
+  postgres:
+    image: postgres:17.6-alpine3.22
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-blogflix}
+      POSTGRES_USER: ${DB_USERNAME:-blogflix}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
+      POSTGRES_TEST_DB: ${POSTGRES_TEST_DB:-blogflix_testing}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.2.1-alpine3.22
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks: [internal]
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [internal, public]
+    restart: unless-stopped
+
+  init:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: runtime
+    environment: *backend-environment
+    command: ["/usr/local/bin/init-app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - laravel_storage:/var/www/backend/storage
+    networks: [internal]
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: runtime
+    environment: *backend-environment
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "SCRIPT_NAME=/fpm-ping SCRIPT_FILENAME=/fpm-ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 2>/dev/null | grep -q pong"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    volumes:
+      - laravel_storage:/var/www/backend/storage
+    networks: [internal, public]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: runtime
+    environment: *backend-environment
+    command: ["php", "artisan", "queue:work", "redis", "--queue=emails,default", "--sleep=1", "--tries=3", "--timeout=60", "--max-time=3600"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    stop_grace_period: 70s
+    volumes:
+      - laravel_storage:/var/www/backend/storage
+    networks: [internal, public]
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks: [internal, public]
+    restart: unless-stopped
+
+  backend-test:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: testing
+    environment:
+      <<: *backend-environment
+      APP_ENV: testing
+      APP_KEY: base64:7C7VnV4rT8Uwe2V4GRtYl0uCHOTJVg+k1zWWtE2k6LM=
+      APP_DEBUG: "false"
+      TMDB_API_TOKEN: testing-token
+      DB_DATABASE: ${POSTGRES_TEST_DB:-blogflix_testing}
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal]
+
+  frontend-tooling:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+      target: frontend-tooling
+    working_dir: /workspace
+    command: ["npm", "test"]
+    volumes:
+      - ./apps/frontend:/workspace
+      - frontend_node_modules:/workspace/node_modules
+    networks: [internal]
+
+volumes:
+  postgres_data:
+  redis_data:
+  laravel_storage:
+  frontend_node_modules:
+
+networks:
+  public:
+  internal:
+    internal: true

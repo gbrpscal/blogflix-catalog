@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+**/.env
+**/node_modules
+**/vendor
+**/dist
+**/coverage
+**/bootstrap/cache/*.php
+**/storage/logs/*.log
