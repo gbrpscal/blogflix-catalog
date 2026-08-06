@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const app = useAppStore()
 const router = useRouter()
 
 async function logout() {
@@ -14,7 +16,12 @@ async function logout() {
 <template>
   <header class="app-header">
     <a href="#main-content" class="skip-link">Pular para o conteúdo</a>
-    <RouterLink to="/movies" class="brand" aria-label="Blogflix, página inicial">
+    <RouterLink
+      to="/movies"
+      class="brand"
+      aria-label="Blogflix, página inicial"
+      @click="app.requestCatalogReset"
+    >
       <span aria-hidden="true">▶</span> Blogflix
     </RouterLink>
     <nav v-if="auth.authenticated" aria-label="Navegação principal">

@@ -24,6 +24,15 @@ export interface Movie {
   runtime?: number | null
 }
 
+export type MovieSort = 'releases' | 'highlights' | 'title_asc' | 'title_desc'
+
+export interface MovieCollections {
+  popular: Movie[]
+  top_rated: Movie[]
+  releases: Movie[]
+  trending: Movie[]
+}
+
 export interface Favorite extends Movie {
   id: number
   created_at: string

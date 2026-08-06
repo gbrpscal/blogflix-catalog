@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Enums\MovieSort;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class SearchMoviesRequest extends FormRequest
 {
@@ -14,8 +16,10 @@ class SearchMoviesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'query' => ['required', 'string', 'min:2', 'max:100'],
+            'query' => ['nullable', 'string', 'min:2', 'max:100'],
             'page' => ['sometimes', 'integer', 'min:1', 'max:500'],
+            'genre_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'sort' => ['sometimes', Rule::enum(MovieSort::class)],
         ];
     }
 
@@ -23,7 +27,9 @@ class SearchMoviesRequest extends FormRequest
     {
         if (is_string($this->query('query'))) {
             $query = preg_replace('/\s+/u', ' ', $this->query('query'));
-            $this->merge(['query' => trim((string) $query)]);
+            $query = trim((string) $query);
+
+            $this->merge(['query' => $query === '' ? null : $query]);
         }
     }
 }

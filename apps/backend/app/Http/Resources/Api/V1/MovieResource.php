@@ -16,7 +16,7 @@ class MovieResource extends JsonResource
             'title' => $this->title,
             'overview' => $this->overview,
             'poster_path' => $this->posterPath,
-            'poster_url' => $this->posterPath ? $imageBase.'/w500'.$this->posterPath : null,
+            'poster_url' => $this->posterPath ? $imageBase.'/w342'.$this->posterPath : null,
             'backdrop_url' => $this->backdropPath ? $imageBase.'/w780'.$this->backdropPath : null,
             'release_date' => $this->releaseDate,
             'genre_ids' => $this->genreIds,

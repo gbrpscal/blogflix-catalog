@@ -6,6 +6,7 @@ import type { Meta } from '@/types'
 export const useAppStore = defineStore('app', () => {
   const meta = ref<Meta>({ tmdb_enabled: false, google_oauth_enabled: false })
   const loaded = ref(false)
+  const catalogResetToken = ref(0)
 
   async function loadMeta(): Promise<void> {
     if (loaded.value) return
@@ -13,5 +14,9 @@ export const useAppStore = defineStore('app', () => {
     loaded.value = true
   }
 
-  return { meta, loaded, loadMeta }
+  function requestCatalogReset(): void {
+    catalogResetToken.value += 1
+  }
+
+  return { meta, loaded, catalogResetToken, loadMeta, requestCatalogReset }
 })

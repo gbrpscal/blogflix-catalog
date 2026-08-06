@@ -1,16 +1,38 @@
 import { http } from './http'
-import type { Favorite, Genre, Meta, Movie, PaginatedResponse } from '@/types'
+import type {
+  Favorite,
+  Genre,
+  Meta,
+  Movie,
+  MovieCollections,
+  MovieSort,
+  PaginatedResponse,
+} from '@/types'
 
 export const catalogApi = {
   async meta(): Promise<Meta> {
     const response = await http.get<{ data: Meta }>('/meta')
     return response.data.data
   },
-  async search(query: string, page = 1): Promise<PaginatedResponse<Movie>> {
+  async movies(params: {
+    query?: string
+    page?: number
+    genreId?: number
+    sort?: MovieSort
+  }): Promise<PaginatedResponse<Movie>> {
     const response = await http.get<PaginatedResponse<Movie>>('/movies', {
-      params: { query, page },
+      params: {
+        query: params.query || undefined,
+        page: params.page ?? 1,
+        genre_id: params.genreId,
+        sort: params.sort ?? 'highlights',
+      },
     })
     return response.data
+  },
+  async collections(): Promise<MovieCollections> {
+    const response = await http.get<{ data: MovieCollections }>('/movies/collections')
+    return response.data.data
   },
   async genres(): Promise<Genre[]> {
     const response = await http.get<{ data: Genre[] }>('/genres')

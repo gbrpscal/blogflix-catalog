@@ -17,7 +17,7 @@ class FavoriteResource extends JsonResource
             'title' => $this->title,
             'overview' => $this->overview,
             'poster_path' => $this->poster_path,
-            'poster_url' => $this->poster_path ? $imageBase.'/w500'.$this->poster_path : null,
+            'poster_url' => $this->poster_path ? $imageBase.'/w342'.$this->poster_path : null,
             'release_date' => $this->release_date?->format('Y-m-d'),
             'genre_ids' => $this->genre_ids,
             'created_at' => $this->created_at?->toISOString(),

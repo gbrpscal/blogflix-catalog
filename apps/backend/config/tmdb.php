@@ -12,5 +12,6 @@ return [
         'search_ttl' => (int) env('TMDB_SEARCH_CACHE_TTL', 600),
         'movie_ttl' => (int) env('TMDB_MOVIE_CACHE_TTL', 3600),
         'genres_ttl' => (int) env('TMDB_GENRES_CACHE_TTL', 86400),
+        'collections_ttl' => (int) env('TMDB_COLLECTIONS_CACHE_TTL', 1800),
     ],
 ];

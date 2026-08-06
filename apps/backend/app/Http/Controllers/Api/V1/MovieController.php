@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\MovieSort;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\SearchMoviesRequest;
 use App\Http\Resources\Api\V1\MovieResource;
@@ -14,9 +15,12 @@ class MovieController extends Controller
 
     public function index(SearchMoviesRequest $request): JsonResponse
     {
-        $result = $this->movies->search(
-            (string) $request->validated('query'),
+        $sort = MovieSort::from((string) $request->validated('sort', MovieSort::Highlights->value));
+        $result = $this->movies->catalog(
+            $request->validated('query'),
             (int) $request->validated('page', 1),
+            $sort,
+            $request->filled('genre_id') ? (int) $request->validated('genre_id') : null,
         );
 
         return response()->json([

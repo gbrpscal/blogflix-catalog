@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\FavoriteController;
 use App\Http\Controllers\Api\V1\GenreController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\MetaController;
+use App\Http\Controllers\Api\V1\MovieCollectionController;
 use App\Http\Controllers\Api\V1\MovieController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::middleware('verified')->group(function (): void {
             Route::get('/movies', [MovieController::class, 'index'])->middleware('throttle:tmdb');
+            Route::get('/movies/collections', MovieCollectionController::class)->middleware('throttle:tmdb');
             Route::get('/movies/{tmdbId}', [MovieController::class, 'show'])
                 ->whereNumber('tmdbId')->middleware('throttle:tmdb');
             Route::get('/genres', GenreController::class)->middleware('throttle:tmdb');

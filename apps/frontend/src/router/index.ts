@@ -53,7 +53,11 @@ const router = createRouter({
       component: () => import('@/views/NotFoundView.vue'),
     },
   ],
-  scrollBehavior: () => ({ top: 0 }),
+  scrollBehavior: (to, from, savedPosition) => {
+    if (savedPosition) return savedPosition
+    if (to.name === 'movies' && from.name === 'movies') return false
+    return { top: 0 }
+  },
 })
 
 router.beforeEach(async (to) => {

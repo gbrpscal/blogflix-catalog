@@ -95,7 +95,7 @@ Para produção, use HTTPS, `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SE
    docker compose up -d --build
    ```
 
-O backend envia o token apenas no header Authorization. A busca, os detalhes e os gêneros passam pelo Laravel.
+O backend envia o token apenas no header Authorization. Busca, descoberta, coleções, detalhes e gêneros passam pelo Laravel.
 
 ## Google OAuth
 
@@ -203,6 +203,9 @@ No frontend:
 - views orquestram páginas;
 - components são reutilizáveis e acessíveis;
 - nenhum token é gravado em localStorage.
+- busca mantém nome e gênero em edição até o envio explícito do formulário;
+- rota da SPA usa apenas os parâmetros curtos: `q`, `g`, `s` e `p`;
+- ordenação é independente, usa Destaques por padrão e reinicia a paginação ao mudar;
 
 ## Estrutura de diretórios
 
@@ -304,17 +307,25 @@ Endpoints que também exigem e-mail verificado:
 
 | Método | Endpoint | Entrada |
 |---|---|---|
-| GET | `/api/v1/movies` | `query`, `page` |
+| GET | `/api/v1/movies` | `query` opcional, `page`, `genre_id`, `sort` |
+| GET | `/api/v1/movies/collections` | coleções popular, melhores avaliações, lançamentos e em alta |
 | GET | `/api/v1/movies/{tmdbId}` | ID TMDB |
 | GET | `/api/v1/genres` | — |
 | GET | `/api/v1/favorites` | `genre_id`, `page`, `per_page` |
 | POST | `/api/v1/favorites` | `{"tmdb_id": 550}` |
 | DELETE | `/api/v1/favorites/{favorite}` | ID interno do favorito |
 
-Exemplo de busca após autenticação da SPA:
+Exemplo de catálogo inicial paginado e filtrado:
 
 ```http
-GET /api/v1/movies?query=matrix&page=1
+GET /api/v1/movies?page=1&genre_id=18&sort=highlights
+Accept: application/json
+```
+
+Exemplo de busca por título, com ordenação da página retornada:
+
+```http
+GET /api/v1/movies?query=matrix&page=1&genre_id=878&sort=title_asc
 Accept: application/json
 ```
 
@@ -345,9 +356,11 @@ Os guards Vue melhoram a navegação, mas não são controle de acesso. Policies
 ## Cache e resiliência do TMDB
 
 - pesquisas: 600 s por padrão;
+- descoberta paginada: 600 s por padrão;
 - detalhes: 3600 s;
 - gêneros: 86400 s;
-- chaves incluem idioma, região, página e query normalizada/hasheada;
+- coleções da home: 1800 s;
+- chaves incluem idioma, região, página, filtros, ordenação e query normalizada/hasheada;
 - Redis usa conexão separada para cache;
 - timeout de conexão: 3 s;
 - timeout total: 8 s;
@@ -359,9 +372,9 @@ Altere os TTLs com `TMDB_*_CACHE_TTL`. Os testes usam `Http::fake()` e nunca ace
 
 ## Telas e componentes
 
-Views: login, cadastro, esqueci a senha, redefinição, aviso de verificação, busca/resultados, favoritos/filtro e 404.
+Views: login, cadastro, esqueci a senha, redefinição, aviso de verificação, home de descoberta/busca, favoritos/filtro e 404.
 
-Componentes principais: `MovieCard`, `SearchField`, `AppPagination`, `FormField`, `ErrorMessage`, `LoadingIndicator`, `ConfirmDialog` e `AppHeader`.
+Componentes principais: `MovieCard`, `MovieCarousel`, `SearchField`, `AppPagination`, `FormField`, `ErrorMessage`, `LoadingIndicator`, `ConfirmDialog` e `AppHeader`.
 
 O layout é responsivo, possui navegação por teclado, labels, estados de foco, mensagens anunciáveis, loading, vazios e erros.
 
@@ -439,6 +452,7 @@ Consulte [DEVELOPMENT.md](DEVELOPMENT.md) antes de alterar contratos, banco ou i
 - Fortify fornece autenticação headless; Vue é responsável pelas telas.
 - Snapshot mínimo do filme preserva favoritos se os dados externos mudarem.
 - Gêneros não são duplicados em tabela local; o catálogo do TMDB fica cacheado.
+- “Mais assistidos” usa a lista de popularidade do TMDB, pois a API não fornece contagem pública real de visualizações.
 - E-mails são jobs criptografados, mantendo requests de cadastro/reset rápidos.
 - Nginx é a única porta pública da aplicação e bloqueia arquivos sensíveis do Laravel.
 - Perfis `tools` mantêm dependências de desenvolvimento fora da imagem PHP de runtime.
@@ -448,6 +462,7 @@ Consulte [DEVELOPMENT.md](DEVELOPMENT.md) antes de alterar contratos, banco ou i
 - credenciais Google/TMDB precisam ser criadas e inseridas pelo responsável;
 - não há testes E2E em navegador nem pipeline CI neste repositório;
 - não há painel para reprocessar jobs falhos;
+- na busca textual, gênero e ordenação são aplicados à página retornada pelo TMDB; a descoberta sem texto usa filtros globais nativos;
 - a disponibilidade e as imagens dos filmes dependem do TMDB;
 - a imagem Nginx é estática: mudanças Vue exigem rebuild;
 - produção exige domínio, HTTPS, SMTP real e revisão dos limites conforme a carga.
