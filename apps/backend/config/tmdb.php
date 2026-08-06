@@ -8,6 +8,7 @@ return [
     'region' => env('TMDB_REGION', 'BR'),
     'connect_timeout' => (int) env('TMDB_CONNECT_TIMEOUT', 3),
     'timeout' => (int) env('TMDB_TIMEOUT', 8),
+    'collections_limit' => (int) env('TMDB_COLLECTIONS_LIMIT', 20),
     'cache' => [
         'search_ttl' => (int) env('TMDB_SEARCH_CACHE_TTL', 600),
         'movie_ttl' => (int) env('TMDB_MOVIE_CACHE_TTL', 3600),

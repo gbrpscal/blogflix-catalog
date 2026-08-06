@@ -144,16 +144,17 @@ class TmdbMovieService
     private function collection(string $name, string $path, array $params): array
     {
         $params['page'] = 1;
-        $key = 'tmdb:v1:collection:'.$name.':'.hash('sha256', json_encode($params, JSON_THROW_ON_ERROR));
+        $limit = min(self::TMDB_PAGE_SIZE, max(1, (int) config('tmdb.collections_limit')));
+        $key = 'tmdb:v1:collection:'.$name.':'.$limit.':'.hash('sha256', json_encode($params, JSON_THROW_ON_ERROR));
 
-        return Cache::remember($key, (int) config('tmdb.cache.collections_ttl'), function () use ($path, $params): array {
+        return Cache::remember($key, (int) config('tmdb.cache.collections_ttl'), function () use ($path, $params, $limit): array {
             $page = $this->pageFromPayload(
                 $this->client->get($path, $params),
                 1,
                 MovieSort::Highlights,
             );
 
-            return array_slice($page->movies, 0, 12);
+            return array_slice($page->movies, 0, $limit);
         });
     }
 

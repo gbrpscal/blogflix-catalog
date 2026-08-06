@@ -147,8 +147,8 @@ it('caches each home collection independently', function (): void {
     $payload = [
         'page' => 1,
         'total_pages' => 1,
-        'total_results' => 1,
-        'results' => [fakeMovieDetails()],
+        'total_results' => 20,
+        'results' => collect(range(1, 20))->map(fakeMovieDetails(...))->all(),
     ];
     Http::fake([
         'api.themoviedb.org/3/movie/popular*' => Http::response($payload),
@@ -162,8 +162,8 @@ it('caches each home collection independently', function (): void {
     $second = $service->collections();
 
     expect($first)->toHaveKeys(['popular', 'top_rated', 'releases', 'trending'])
-        ->and($first['popular'])->toHaveCount(1)
-        ->and($second['trending'])->toHaveCount(1);
+        ->and($first['popular'])->toHaveCount(20)
+        ->and($second['trending'])->toHaveCount(20);
     Http::assertSentCount(4);
 });
 

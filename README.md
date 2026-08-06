@@ -71,7 +71,7 @@ O `.env.example` é a referência completa. Os grupos mais importantes são:
 - PostgreSQL: `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `POSTGRES_TEST_DB`;
 - cookies: `SESSION_DOMAIN`, `SESSION_SECURE_COOKIE`, `SANCTUM_STATEFUL_DOMAINS`;
 - e-mail: `MAIL_*`;
-- TMDB: `TMDB_API_TOKEN`, idioma, região, timeouts e TTLs;
+- TMDB: `TMDB_API_TOKEN`, idioma, região, limite das coleções, timeouts e TTLs;
 - Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
 
 Para produção, use HTTPS, `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`, domínio de sessão correto e origens CORS/Sanctum estritamente definidas.
@@ -87,6 +87,7 @@ Para produção, use HTTPS, `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SE
    TMDB_API_TOKEN=seu_read_access_token
    TMDB_LANGUAGE=pt-BR
    TMDB_REGION=BR
+   TMDB_COLLECTIONS_LIMIT=20
    ```
 
 5. Recrie as imagens/containers:
@@ -369,7 +370,7 @@ Os guards Vue melhoram a navegação, mas não são controle de acesso. Policies
 - erros externos viram resposta 502/503 controlada;
 - token nunca é incluído em mensagens de log.
 
-Altere os TTLs com `TMDB_*_CACHE_TTL`. Os testes usam `Http::fake()` e nunca acessam o TMDB real.
+Altere os TTLs com `TMDB_*_CACHE_TTL` e o número de filmes por carrossel com `TMDB_COLLECTIONS_LIMIT` (máximo 20). Os testes usam `Http::fake()` e nunca acessam o TMDB real.
 
 ## Telas e componentes
 
