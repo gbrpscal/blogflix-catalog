@@ -502,15 +502,3 @@ docker compose --profile tools build frontend-tooling
 docker compose exec backend php artisan route:list --path=api/v1
 docker compose exec backend php artisan migrate:status
 ```
-
-## Git
-
-O projeto não cria commits automaticamente. Revise `git diff` e `git status`; depois use commits semânticos por etapa, por exemplo:
-
-- `chore: initialize monorepo and docker environment`
-- `feat: implement user authentication`
-- `feat: add google oauth login`
-- `feat: integrate tmdb movie search`
-- `feat: implement favorite management`
-- `test: cover catalog business rules`
-- `docs: add project setup and architecture`
