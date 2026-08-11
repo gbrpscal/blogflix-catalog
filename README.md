@@ -76,6 +76,97 @@ O `.env.example` é a referência completa. Os grupos mais importantes são:
 
 Para produção, use HTTPS, `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`, domínio de sessão correto e origens CORS/Sanctum estritamente definidas.
 
+## Deploy no Railway
+
+O repositório está preparado para um projeto Railway com cinco recursos:
+
+| Recurso | Origem | Exposição |
+|---|---|---|
+| `web` | `railway/web.json` | único serviço com domínio público |
+| `backend` | `railway/backend.json` | rede privada, PHP-FPM na porta 9000 |
+| `worker` | `railway/worker.json` | rede privada, consumidor da fila Redis |
+| `Postgres` | template oficial Railway | rede privada e volume gerenciado |
+| `Redis` | template oficial Railway | rede privada e volume gerenciado |
+
+Cada serviço de código deve apontar para este mesmo repositório e para a branch escolhida para produção. Em **Config as Code**, informe o caminho correspondente:
+
+- `/railway/web.json` no serviço `web`;
+- `/railway/backend.json` no serviço `backend`;
+- `/railway/worker.json` no serviço `worker`.
+
+O nome `backend` é intencional: o Nginx usa `backend.railway.internal`. Se o serviço receber outro nome, defina `BACKEND_HOST` no `web` com o domínio privado correto. O Railway fornece `PORT` ao serviço público; `BACKEND_PORT` permanece 9000.
+
+O `backend` executa `php artisan migrate --force` como pre-deploy command. O `worker` invoca o entrypoint da imagem antes de iniciar `queue:work`, preservando o cache de configuração e a preparação das permissões. O Mailpit não é publicado: produção deve usar SMTP transacional real.
+
+Variáveis mínimas compartilhadas por `backend` e `worker`:
+
+```dotenv
+APP_NAME=Blogflix
+APP_ENV=production
+APP_KEY=base64:gere-uma-chave-exclusiva
+APP_DEBUG=false
+APP_URL=https://seu-dominio.up.railway.app
+FRONTEND_URL=https://seu-dominio.up.railway.app
+APP_LOCALE=pt_BR
+APP_FALLBACK_LOCALE=en
+APP_TIMEZONE=America/Sao_Paulo
+
+LOG_CHANNEL=stack
+LOG_STACK=stderr
+LOG_LEVEL=info
+
+DB_CONNECTION=pgsql
+DB_URL=${{Postgres.DATABASE_URL}}
+DB_SSLMODE=require
+
+REDIS_URL=${{Redis.REDIS_URL}}
+REDIS_DB=0
+REDIS_CACHE_DB=1
+REDIS_SESSION_DB=2
+REDIS_QUEUE_DB=3
+CACHE_STORE=redis
+REDIS_CACHE_CONNECTION=cache
+SESSION_DRIVER=redis
+SESSION_CONNECTION=session
+QUEUE_CONNECTION=redis
+REDIS_QUEUE_CONNECTION=queue
+
+SESSION_SECURE_COOKIE=true
+SESSION_HTTP_ONLY=true
+SESSION_SAME_SITE=lax
+SANCTUM_STATEFUL_DOMAINS=seu-dominio.up.railway.app
+CORS_ALLOWED_ORIGINS=https://seu-dominio.up.railway.app
+```
+
+As referências `Postgres` e `Redis` devem corresponder exatamente aos nomes dos serviços no projeto Railway. Além delas, configure `MAIL_*`, `TMDB_*` e `GOOGLE_*` com os valores de produção. Não copie o placeholder de `APP_KEY`; gere uma chave estável e nunca a altere enquanto houver sessões ou jobs criptografados pendentes.
+
+No serviço `web`, apenas estas variáveis específicas são necessárias:
+
+```dotenv
+BACKEND_HOST=backend.railway.internal
+BACKEND_PORT=9000
+```
+
+Depois de gerar o domínio público, atualize no Google Cloud o callback exato:
+
+```text
+https://seu-dominio.up.railway.app/api/v1/auth/google/callback
+```
+
+e defina o mesmo valor em `GOOGLE_REDIRECT_URI`.
+
+### Deploy contínuo
+
+O workflow `.github/workflows/ci.yml` valida Pest, Pint, Vitest, TypeScript, ESLint, Prettier, Compose e as imagens de produção. A configuração recomendada no Railway é:
+
+1. conectar os três serviços de código ao mesmo repositório GitHub;
+2. usar `main` como branch de produção depois da revisão da branch de trabalho;
+3. ativar **Wait for CI** antes do deploy;
+4. manter domínio público somente no `web`;
+5. executar o primeiro deploy somente depois de cadastrar todas as variáveis.
+
+Os arquivos em `railway/` não contêm credenciais. As variáveis e referências entre serviços são configuradas no Railway e continuam fora do Git.
+
 ## Credencial do TMDB
 
 1. Crie uma conta no [TMDB](https://www.themoviedb.org/signup).
@@ -212,6 +303,7 @@ No frontend:
 
 ```text
 .
+├── .github/workflows/ci.yml
 ├── apps/
 │   ├── backend/
 │   │   ├── app/
@@ -239,8 +331,10 @@ No frontend:
 ├── docker/
 │   ├── nginx/
 │   ├── php/
+│   ├── railway/
 │   ├── postgres/init/
 │   └── redis/
+├── railway/{backend,web,worker}.json
 ├── compose.yaml
 ├── DEVELOPMENT.md
 └── .env.example
@@ -422,8 +516,8 @@ As versões transitivas completas estão em `composer.lock` e `package-lock.json
 Backend, em PostgreSQL isolado:
 
 ```bash
-docker compose --profile tools run --rm backend-test php artisan test --compact
-docker compose --profile tools run --rm backend-test vendor/bin/pint --test
+docker compose --profile tools run --rm backend-test composer test
+docker compose --profile tools run --rm backend-test composer lint
 ```
 
 Frontend:
@@ -439,6 +533,7 @@ Build de produção:
 
 ```bash
 docker compose build backend worker nginx
+docker build --file docker/railway/web.Dockerfile --tag blogflix-web:local .
 ```
 
 A cobertura backend inclui DTO unitário, favoritos, autorização, filtro JSONB, validação, cache/erros e janela de busca TMDB, cadastro, sessão, verificação, reset e OAuth falso. O frontend cobre cards, carrossel por setas, paginação, URL curta, formulário de busca e store de autenticação.
@@ -462,12 +557,13 @@ Consulte [DEVELOPMENT.md](DEVELOPMENT.md) antes de alterar contratos, banco ou i
 ## Limitações conhecidas
 
 - credenciais Google/TMDB precisam ser criadas e inseridas pelo responsável;
-- não há testes E2E em navegador nem pipeline CI neste repositório;
+- não há testes E2E em navegador; o CI cobre testes, linters, tipos e builds;
 - não há painel para reprocessar jobs falhos;
 - na busca textual, gênero e ordenação são aplicados a uma janela de duas páginas adjacentes do TMDB; a descoberta sem texto usa filtros globais nativos;
 - a disponibilidade e as imagens dos filmes dependem do TMDB;
 - a imagem Nginx é estática: mudanças Vue exigem rebuild;
 - produção exige domínio, HTTPS, SMTP real e revisão dos limites conforme a carga.
+- o primeiro provisionamento e as credenciais de produção continuam sendo intervenções manuais no Railway e nos provedores externos.
 
 ## Solução de problemas
 

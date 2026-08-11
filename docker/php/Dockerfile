@@ -46,6 +46,7 @@ ENTRYPOINT ["/usr/local/bin/app-entrypoint"]
 CMD ["php-fpm", "-F"]
 
 FROM php-base AS testing
+COPY --from=vendor-testing /usr/bin/composer /usr/local/bin/composer
 COPY --from=vendor-testing /app/vendor ./vendor
 COPY apps/backend .
 RUN touch .env \

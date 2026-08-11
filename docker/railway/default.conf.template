@@ -1,0 +1,53 @@
+server {
+    listen ${PORT};
+    listen [::]:${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    resolver ${DNS_RESOLVER} valid=10s;
+
+    server_tokens off;
+    charset utf-8;
+    client_max_body_size 16m;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://image.tmdb.org; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://accounts.google.com" always;
+
+    location ~ /\. {
+        deny all;
+    }
+
+    location ~* ^/(?:vendor|storage/logs|bootstrap|config|database|resources|routes)/ {
+        deny all;
+    }
+
+    location ~ ^/(api/|sanctum/csrf-cookie$) {
+        include fastcgi_params;
+        set $backend_upstream "${BACKEND_HOST}:${BACKEND_PORT}";
+        fastcgi_pass $backend_upstream;
+        fastcgi_param SCRIPT_FILENAME /var/www/backend/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param HTTP_HOST $http_host;
+        fastcgi_param HTTP_X_FORWARDED_FOR $http_x_forwarded_for;
+        fastcgi_param HTTP_X_FORWARDED_HOST $http_x_forwarded_host;
+        fastcgi_param HTTP_X_FORWARDED_PORT $http_x_forwarded_port;
+        fastcgi_param HTTP_X_FORWARDED_PROTO $http_x_forwarded_proto;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_hide_header X-Powered-By;
+        fastcgi_read_timeout 60s;
+    }
+
+    location ~* \.(?:css|js|jpg|jpeg|gif|png|svg|ico|webp|woff2?)$ {
+        try_files $uri =404;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

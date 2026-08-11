@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run Pest
+        run: docker compose --profile tools run --rm backend-test composer test
+
+      - name: Run Pint
+        run: docker compose --profile tools run --rm backend-test composer lint
+
+      - name: Stop test services
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run unit tests
+        run: docker compose --profile tools run --rm --no-deps frontend-tooling npm test
+
+      - name: Run type check
+        run: docker compose --profile tools run --rm --no-deps frontend-tooling npm run type-check
+
+      - name: Run ESLint
+        run: docker compose --profile tools run --rm --no-deps frontend-tooling npm run lint
+
+      - name: Run Prettier
+        run: docker compose --profile tools run --rm --no-deps frontend-tooling npm run format:check
+
+      - name: Stop test services
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  images:
+    name: Production images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs:
+      - backend
+      - frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate Compose
+        run: docker compose config --quiet
+
+      - name: Validate Railway configuration
+        run: jq empty railway/*.json
+
+      - name: Build local production images
+        run: docker compose build backend worker nginx
+
+      - name: Build Railway web image
+        run: docker build --file docker/railway/web.Dockerfile --tag blogflix-web:ci .

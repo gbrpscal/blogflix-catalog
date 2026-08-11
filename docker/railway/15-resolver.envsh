@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -eu
+
+if [ -z "${DNS_RESOLVER:-}" ]; then
+    DNS_RESOLVER="$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)"
+
+    if [ -z "$DNS_RESOLVER" ]; then
+        DNS_RESOLVER="127.0.0.11"
+    fi
+
+    case "$DNS_RESOLVER" in
+        *:*) DNS_RESOLVER="[$DNS_RESOLVER]" ;;
+    esac
+
+    export DNS_RESOLVER
+fi
