@@ -132,22 +132,29 @@ Ao corrigir uma falha, preserve o teste que a detectou e adicione uma regressão
 
 ```bash
 docker compose config --quiet
-docker compose --profile tools run --rm backend-test php artisan test --compact
-docker compose --profile tools run --rm backend-test vendor/bin/pint --test
+docker compose --profile tools run --rm backend-test composer test
+docker compose --profile tools run --rm backend-test composer lint
 docker compose --profile tools run --rm frontend-tooling npm test
 docker compose --profile tools run --rm frontend-tooling npm run type-check
 docker compose --profile tools run --rm frontend-tooling npm run lint
 docker compose --profile tools run --rm frontend-tooling npm run format:check
 docker compose build backend worker nginx
+docker build --file docker/railway/web.Dockerfile --tag blogflix-web:local .
+python3 -m json.tool railway/web.json
+python3 -m json.tool railway/backend.json
+python3 -m json.tool railway/worker.json
 ```
 
 Para mudanças de infraestrutura, também execute `docker compose up -d`, confira `docker compose ps`, migrations, health endpoint e logs de init/worker.
+
+Os serviços Railway usam configuração como código separada em `railway/`. Backend e worker compartilham a imagem PHP, mas têm processos e ciclos de deploy independentes. Somente o web recebe domínio público; migrations pertencem ao pre-deploy do backend.
 
 ## Git e revisão
 
 - Não faça commit sem autorização do responsável.
 - Uma mudança lógica por commit.
 - Prefixos: `chore`, `feat`, `fix`, `test`, `docs`, `refactor`.
+- Use uma branch de trabalho e integre em `main` somente depois que o CI estiver verde.
 - Não misture formatação global com mudança funcional.
 - Antes de entregar, liste arquivos, resumo, comandos, testes e sugestão de commit.
 - Revise `git diff --check`, `git status --short` e procure segredos.
