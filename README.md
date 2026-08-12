@@ -96,7 +96,7 @@ Cada serviço de código deve apontar para este mesmo repositório e para a bran
 
 O nome `backend` é intencional: o Nginx usa `backend.railway.internal`. Se o serviço receber outro nome, defina `BACKEND_HOST` no `web` com o domínio privado correto. O Railway fornece `PORT` ao serviço público; `BACKEND_PORT` permanece 9000.
 
-O `backend` executa `php artisan migrate --force` como pre-deploy command. O `worker` invoca o entrypoint da imagem antes de iniciar `queue:work`, preservando o cache de configuração e a preparação das permissões. O Mailpit não é publicado: produção deve usar SMTP transacional real.
+O `backend` executa `php artisan migrate --force` como pre-deploy command. O `worker` invoca o entrypoint da imagem antes de iniciar `queue:work`, preservando o cache de configuração e a preparação das permissões. O Mailpit não é publicado: no Railway Free/Hobby, produção usa a API HTTPS transacional do Brevo, pois conexões SMTP são bloqueadas.
 
 Variáveis mínimas compartilhadas por `backend` e `worker`:
 
@@ -131,6 +131,12 @@ SESSION_CONNECTION=session
 QUEUE_CONNECTION=redis
 REDIS_QUEUE_CONNECTION=queue
 
+MAIL_MAILER=brevo
+BREVO_API_KEY=gere-uma-chave-api-no-brevo
+BREVO_TIMEOUT=10
+MAIL_FROM_ADDRESS=remetente-verificado@seudominio.com
+MAIL_FROM_NAME=Blogflix
+
 SESSION_SECURE_COOKIE=true
 SESSION_HTTP_ONLY=true
 SESSION_SAME_SITE=lax
@@ -138,7 +144,7 @@ SANCTUM_STATEFUL_DOMAINS=seu-dominio.up.railway.app
 CORS_ALLOWED_ORIGINS=https://seu-dominio.up.railway.app
 ```
 
-As referências `Postgres` e `Redis` devem corresponder exatamente aos nomes dos serviços no projeto Railway. Além delas, configure `MAIL_*`, `TMDB_*` e `GOOGLE_*` com os valores de produção. Não copie o placeholder de `APP_KEY`; gere uma chave estável e nunca a altere enquanto houver sessões ou jobs criptografados pendentes.
+As referências `Postgres` e `Redis` devem corresponder exatamente aos nomes dos serviços no projeto Railway. Além delas, configure `BREVO_API_KEY`, `MAIL_*`, `TMDB_*` e `GOOGLE_*` com os valores de produção. Use uma API key do Brevo, não uma SMTP key. Não copie o placeholder de `APP_KEY`; gere uma chave estável e nunca a altere enquanto houver sessões ou jobs criptografados pendentes.
 
 No serviço `web`, apenas estas variáveis específicas são necessárias:
 
@@ -222,7 +228,7 @@ Cadastro, reenvio de verificação e recuperação de senha criam notificações
 
 - Redis saudável;
 - worker em execução;
-- transporte SMTP configurado;
+- transporte de e-mail configurado (Mailpit local ou API HTTPS Brevo em produção);
 - `APP_KEY` estável, pois ela criptografa os jobs;
 - `APP_URL`/`FRONTEND_URL` corretas para os links.
 
@@ -239,20 +245,19 @@ MAIL_PASSWORD=
 
 As mensagens aparecem em [http://localhost:8025](http://localhost:8025).
 
-Para SMTP real, use os dados do provedor. Exemplo para STARTTLS:
+No Railway Free/Hobby, SMTP de saída é bloqueado. Use a API HTTPS transacional do Brevo:
 
 ```dotenv
-MAIL_MAILER=smtp
-MAIL_HOST=smtp.exemplo.com
-MAIL_PORT=587
-MAIL_SCHEME=smtp
-MAIL_USERNAME=usuario
-MAIL_PASSWORD=senha
-MAIL_FROM_ADDRESS=no-reply@seudominio.com
+MAIL_MAILER=brevo
+BREVO_API_KEY=chave-api-do-brevo
+BREVO_TIMEOUT=10
+MAIL_FROM_ADDRESS=remetente-verificado@seudominio.com
 MAIL_FROM_NAME=Blogflix
 ```
 
-Para TLS implícito, normalmente use `MAIL_SCHEME=smtps` e porta 465. Confirme a combinação com o provedor.
+`BREVO_API_KEY` deve ser uma API key criada em **SMTP & API > API Keys**. Não use a SMTP key nesse campo. O transporte oficial envia `POST https://api.brevo.com/v3/smtp/email`, com timeout limitado, e funciona nos planos Railway que bloqueiam SMTP.
+
+Em infraestruturas que liberem SMTP, o mailer `smtp` continua disponível com `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` e `MAIL_SCHEME`.
 
 Monitore a fila:
 
@@ -273,7 +278,7 @@ Navegador
                             ├─ Redis (cache, sessão, rate limit, fila)
                             ├─ TMDB (somente pelo TmdbClient)
                             ├─ Google OAuth (Socialite)
-                            └─ SMTP/Mailpit (pelo worker)
+                            └─ Mailpit local / Brevo API HTTPS em produção (pelo worker)
 ```
 
 Separação de responsabilidades no backend:
@@ -495,6 +500,8 @@ Backend instalado no lockfile:
 - Pest 3.8.7;
 - Pest Laravel Plugin 3.2.0;
 - PHPUnit 11.5.56;
+- Symfony Brevo Mailer 7.4.13;
+- Symfony HTTP Client 7.4.16;
 - Pint 1.30.4.
 
 Frontend:
@@ -562,7 +569,7 @@ Consulte [DEVELOPMENT.md](DEVELOPMENT.md) antes de alterar contratos, banco ou i
 - na busca textual, gênero e ordenação são aplicados a uma janela de duas páginas adjacentes do TMDB; a descoberta sem texto usa filtros globais nativos;
 - a disponibilidade e as imagens dos filmes dependem do TMDB;
 - a imagem Nginx é estática: mudanças Vue exigem rebuild;
-- produção exige domínio, HTTPS, SMTP real e revisão dos limites conforme a carga.
+- produção exige domínio, HTTPS, provedor transacional via API e revisão dos limites conforme a carga.
 - o primeiro provisionamento e as credenciais de produção continuam sendo intervenções manuais no Railway e nos provedores externos.
 
 ## Solução de problemas
@@ -578,7 +585,9 @@ docker compose up -d
 
 **Login retorna 419:** acesse tudo pelo mesmo host/porta, revise `APP_URL`, `FRONTEND_URL`, `SANCTUM_STATEFUL_DOMAINS`, `SESSION_DOMAIN` e cookies HTTPS.
 
-**E-mail não chega:** verifique `docker compose ps worker redis mailpit`, `docker compose logs worker` e a UI do Mailpit. Jobs antigos não podem ser descriptografados se `APP_KEY` mudou.
+**E-mail não chega localmente:** verifique `docker compose ps worker redis mailpit`, `docker compose logs worker` e a UI do Mailpit.
+
+**E-mail não chega no Railway:** confirme `MAIL_MAILER=brevo`, `BREVO_API_KEY`, remetente verificado e logs do `worker`/Brevo. SMTP não funciona nos planos Free/Hobby. Gere uma nova notificação em vez de reaproveitar links expirados. Jobs antigos não podem ser descriptografados se `APP_KEY` mudou.
 
 **TMDB aparece desabilitado:** preencha `TMDB_API_TOKEN` e rode `docker compose up -d --build`.
 
