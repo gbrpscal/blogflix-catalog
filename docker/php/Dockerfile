@@ -58,3 +58,5 @@ RUN touch .env \
 USER www-data
 ENTRYPOINT ["/usr/local/bin/app-entrypoint"]
 CMD ["php", "artisan", "test"]
+
+FROM runtime AS production
